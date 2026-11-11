@@ -90,6 +90,18 @@ func findInteractshBinary(name string) (string, error) {
 	return "", fmt.Errorf("%s not found: install Interactsh or set INTERACTSH_BIN_DIR to its executable directory", name)
 }
 
+// A stale Interactsh process from another checkout must not be mistaken for ours.
+func checkInteractshPorts() error {
+	for _, p := range []string{"8053", "8081", "8443", "2525", "2587", "2465", "10389"} {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", p), 200*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
+			return fmt.Errorf("Interactsh port %s is already in use. Stop the old Interactsh server before starting this session", p)
+		}
+	}
+	return nil
+}
+
 func (c *oobController) start() error {
 	c.Lock()
 	if c.serverUp || c.clientUp {
@@ -99,6 +111,14 @@ func (c *oobController) start() error {
 	c.lastError = ""
 	c.token = ""
 	c.Unlock()
+	if err := checkInteractshPorts(); err != nil {
+		c.Lock()
+		c.lastError = err.Error()
+		c.Unlock()
+		return err
+	}
+	// Never reuse a payload left by an earlier session.
+	_ = os.Remove("interactsh-payload.txt")
 	serverBin, err := findInteractshBinary("interactsh-server")
 	if err != nil {
 		return err
@@ -165,7 +185,10 @@ func (c *oobController) start() error {
 	}
 	if token == "" {
 		cancel()
-		return fmt.Errorf("server did not start; check whether ports 8081/8053/10389 are occupied (stop manually started server/client first)")
+		c.Lock()
+		c.lastError = "Interactsh server failed to start. Check for old processes or occupied ports"
+		c.Unlock()
+		return errors.New("Interactsh server failed to start; stop old Interactsh processes and retry")
 	}
 	c.Lock()
 	c.token = token
@@ -211,6 +234,22 @@ func (c *oobController) start() error {
 		}
 		c.Unlock()
 	}()
+	// Wait briefly for the client to register and write its payload file.
+	for i := 0; i < 30; i++ {
+		if b, err := os.ReadFile("interactsh-payload.txt"); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+			return nil
+		}
+		c.Lock()
+		alive := c.clientUp && c.serverUp
+		c.Unlock()
+		if !alive {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	c.Lock()
+	c.lastError = "Interactsh client did not generate a payload. Check registration and local server configuration"
+	c.Unlock()
 	return nil
 }
 func (c *oobController) stop() {
@@ -221,6 +260,7 @@ func (c *oobController) stop() {
 	c.serverCancel = nil
 	c.token = ""
 	c.Unlock()
+	_ = os.Remove("interactsh-payload.txt")
 	if cc != nil {
 		cc()
 	}
@@ -305,7 +345,15 @@ func main() {
 		}
 		b, err := os.ReadFile("interactsh-payload.txt")
 		if err != nil {
-			jsonOut(w, map[string]string{"error": "No payload file. Restart interactsh-client with -ps -psf and keep it running."})
+			status := oob.status()
+			message := "No payload generated yet. Verify that Interactsh Client registered successfully."
+			if status["client"] != true {
+				message = "Interactsh Client is not running. Start Interactsh first."
+			}
+			if detail, ok := status["error"].(string); ok && detail != "" {
+				message += " " + detail
+			}
+			jsonOut(w, map[string]string{"error": message})
 			return
 		}
 		lines := strings.Fields(string(b))
