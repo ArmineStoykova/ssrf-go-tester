@@ -62,6 +62,34 @@ func (c *oobController) status() map[string]any {
 	defer c.Unlock()
 	return map[string]any{"server": c.serverUp, "client": c.clientUp, "error": c.lastError}
 }
+// findInteractshBinary prefers an explicit bin directory, then PATH and Go's default bin.
+func findInteractshBinary(name string) (string, error) {
+	candidates := []string{}
+	if dir := strings.TrimSpace(os.Getenv("INTERACTSH_BIN_DIR")); dir != "" {
+		candidates = append(candidates, filepath.Join(dir, name))
+	}
+	if resolved, err := exec.LookPath(name); err == nil {
+		candidates = append(candidates, resolved)
+	}
+	if gobin := strings.TrimSpace(os.Getenv("GOBIN")); gobin != "" {
+		candidates = append(candidates, filepath.Join(gobin, name))
+	}
+	if gopath := strings.TrimSpace(os.Getenv("GOPATH")); gopath != "" {
+		for _, p := range filepath.SplitList(gopath) {
+			candidates = append(candidates, filepath.Join(p, "bin", name))
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, "go", "bin", name))
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode()&0111 != 0 {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("%s not found: install Interactsh or set INTERACTSH_BIN_DIR to its executable directory", name)
+}
+
 func (c *oobController) start() error {
 	c.Lock()
 	if c.serverUp || c.clientUp {
@@ -71,16 +99,13 @@ func (c *oobController) start() error {
 	c.lastError = ""
 	c.token = ""
 	c.Unlock()
-	home, err := os.UserHomeDir()
+	serverBin, err := findInteractshBinary("interactsh-server")
 	if err != nil {
 		return err
 	}
-	serverBin := filepath.Join(home, "go/bin/interactsh-server")
-	clientBin := filepath.Join(home, "go/bin/interactsh-client")
-	for _, name := range []string{serverBin, clientBin} {
-		if _, err := os.Stat(name); err != nil {
-			return fmt.Errorf("missing binary: %s", name)
-		}
+	clientBin, err := findInteractshBinary("interactsh-client")
+	if err != nil {
+		return err
 	}
 	// Explicitly bind all services to loopback; no public listener.
 	args := []string{"-domain", "oob.test", "-listen-ip", "127.0.0.1", "-dns-port", "8053", "-http-port", "8081", "-https-port", "8443", "-smtp-port", "2525", "-smtps-port", "2587", "-smtp-autotls-port", "2465", "-ldap-port", "10389", "-skip-acme", "-auth", "-verbose"}
