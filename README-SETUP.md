@@ -5,9 +5,9 @@ This branch is for review. It does **not** change your existing Desktop icon or 
 ## Requirements
 
 - Ubuntu with bash, curl, xdg-open, python3 and Go 1.22+
-- Interactsh Server and Client installed at `~/go/bin/interactsh-server` and `~/go/bin/interactsh-client` (current Go backend requirement)
+- Interactsh Server and Client available on PATH, in Go's bin directory, or via `INTERACTSH_BIN_DIR`
 
-Install Interactsh using your approved ProjectDiscovery installation method and verify the binaries before launching. This project does not automatically download third-party executables.
+To install Interactsh explicitly (downloads ProjectDiscovery dependencies), run `bash scripts/install-interactsh.sh`. Review this script before running it. This project never installs tools automatically when opening the desktop launcher.
 
 ## Build and install launcher
 
@@ -30,4 +30,4 @@ Interactsh Server and Client are controlled by the buttons in the browser, not b
 
 ## Limitations
 
-The Interactsh binary locations are currently hardcoded in `main.go`; future work should resolve executables via `PATH` or a configurable directory. The local Interactsh `oob.test` service is not a public OOB endpoint.
+The Go backend resolves Interactsh from `INTERACTSH_BIN_DIR`, `PATH`, `GOBIN`, `GOPATH/bin` or `~/go/bin`. The local Interactsh `oob.test` service is not a public OOB endpoint.
