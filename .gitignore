@@ -1,0 +1,21 @@
+# Executables
+ssrf-go-tester
+*.exe
+
+# Interactsh data
+interactsh-*
+*.jsonl
+*.log
+
+# Backups and temporary files
+*.backup
+*.previous
+*.bak
+*.tmp
+
+# Local secrets and configuration
+.env
+.env.*
+*.ovpn
+*token*
+*secret*
