@@ -31,3 +31,11 @@ Interactsh Server and Client are controlled by the buttons in the browser, not b
 ## Limitations
 
 The Go backend resolves Interactsh from `INTERACTSH_BIN_DIR`, `PATH`, `GOBIN`, `GOPATH/bin` or `~/go/bin`. The local Interactsh `oob.test` service is not a public OOB endpoint.
+
+## Interactsh session troubleshooting
+
+Only one local Interactsh server can own the configured ports at a time. Before pressing **Start Interactsh**, stop any Interactsh server/client launched from an older checkout. The application checks local TCP listener ports and displays a conflict instead of silently attaching to another checkout.
+
+Each new session clears the previous `interactsh-payload.txt` file. After the client starts, the backend waits briefly for registration and payload generation. If no payload appears, the status and Generate OOB URL controls show a diagnostic message. Do not copy a payload from another checkout or assume a running process has registered successfully.
+
+After pulling a new version, rebuild with `go build -o ssrf-go-tester .` and restart the Go backend; reloading the browser alone does not load new Go code.
