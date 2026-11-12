@@ -5,5 +5,5 @@ Name=SSRF Go Tester
 Comment=Local SSRF Security QA workbench
 Exec=/usr/bin/env bash -c 'exec "$HOME/Downloads/ssrf-go-tester/scripts/launch.sh"'
 Icon=applications-development
-Terminal=true
+Terminal=false
 Categories=Development;
